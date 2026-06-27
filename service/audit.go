@@ -92,3 +92,42 @@ func (as *AuditService) BatchDeleteAuditConn(ids []uint) error {
 func (as *AuditService) BatchDeleteAuditFile(ids []uint) error {
 	return DB.Where("id in (?)", ids).Delete(&model.AuditFile{}).Error
 }
+
+// === CE-M1-6: AuditEvent 系列 ===
+
+// AuditEventList 分页查询统一审计事件;where 闭包内可叠加 kind / peer_id 过滤与排序。
+func (as *AuditService) AuditEventList(page, pageSize uint, where func(tx *gorm.DB)) (res *model.AuditEventList) {
+	res = &model.AuditEventList{}
+	res.Page = int64(page)
+	res.PageSize = int64(pageSize)
+	tx := DB.Model(&model.AuditEvent{})
+	if where != nil {
+		where(tx)
+	}
+	tx.Count(&res.Total)
+	tx.Scopes(Paginate(page, pageSize))
+	tx.Find(&res.AuditEvents)
+	return
+}
+
+// CreateAuditEvent 写入一条审计事件。
+func (as *AuditService) CreateAuditEvent(u *model.AuditEvent) error {
+	return DB.Create(u).Error
+}
+
+// EventInfoById 按主键取一条;未命中返回零值结构体(Id=0)。
+func (as *AuditService) EventInfoById(id uint) (res *model.AuditEvent) {
+	res = &model.AuditEvent{}
+	DB.Where("id = ?", id).First(res)
+	return
+}
+
+// DeleteAuditEvent 删除一条审计事件。
+func (as *AuditService) DeleteAuditEvent(u *model.AuditEvent) error {
+	return DB.Delete(u).Error
+}
+
+// BatchDeleteAuditEvent 批量按 id 删除。
+func (as *AuditService) BatchDeleteAuditEvent(ids []uint) error {
+	return DB.Where("id in (?)", ids).Delete(&model.AuditEvent{}).Error
+}

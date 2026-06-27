@@ -13,6 +13,8 @@ type Service struct {
 	//AdminService     *AdminService
 	//AdminRoleService *AdminRoleService
 	*UserService
+	*MfaService
+	*MfaTicketService
 	*AddressBookService
 	*TagService
 	*PeerService
@@ -24,6 +26,7 @@ type Service struct {
 	*ServerCmdService
 	*LdapService
 	*AppService
+	*ClientBuilderService
 }
 
 type Dependencies struct {

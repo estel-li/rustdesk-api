@@ -167,3 +167,23 @@ other = "已被禁用。"
 description = "Register success, wait admin confirm."
 one = "註冊成功，等待管理員確認。"
 other = "註冊成功，等待管理員確認。"
+
+[MfaRequired]
+description = "MFA required."
+one = "需要多因子認證。"
+other = "需要多因子認證。"
+
+[MfaTicketInvalid]
+description = "MFA ticket invalid."
+one = "MFA 憑證無效，請重新登入。"
+other = "MFA 憑證無效，請重新登入。"
+
+[MfaTicketExpired]
+description = "MFA ticket expired."
+one = "MFA 憑證已過期，請重新登入。"
+other = "MFA 憑證已過期，請重新登入。"
+
+[MfaCodeError]
+description = "MFA code error."
+one = "驗證碼錯誤。"
+other = "驗證碼錯誤。"

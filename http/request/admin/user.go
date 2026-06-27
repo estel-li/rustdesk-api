@@ -9,12 +9,13 @@ type UserForm struct {
 	Username string `json:"username" validate:"required,gte=2,lte=32"`
 	Email    string `json:"email"` //validate:"required,email" email不强制
 	//Password string           `json:"password" validate:"required,gte=4,lte=20"`
-	Nickname string           `json:"nickname"`
-	Avatar   string           `json:"avatar"`
-	GroupId  uint             `json:"group_id" validate:"required"`
-	IsAdmin  *bool            `json:"is_admin" `
-	Status   model.StatusCode `json:"status" validate:"required,gte=0"`
-	Remark   string           `json:"remark"`
+	Nickname    string           `json:"nickname"`
+	Avatar      string           `json:"avatar"`
+	GroupId     uint             `json:"group_id" validate:"required"`
+	IsAdmin     *bool            `json:"is_admin" `
+	Status      model.StatusCode `json:"status" validate:"required,gte=0"`
+	Remark      string           `json:"remark"`
+	MfaRequired *bool            `json:"mfa_required"` // CE-M1-5 强制 MFA 开关
 }
 
 func (uf *UserForm) FromUser(user *model.User) *UserForm {
@@ -27,6 +28,7 @@ func (uf *UserForm) FromUser(user *model.User) *UserForm {
 	uf.IsAdmin = user.IsAdmin
 	uf.Status = user.Status
 	uf.Remark = user.Remark
+	uf.MfaRequired = user.MfaRequired
 	return uf
 }
 func (uf *UserForm) ToUser() *model.User {
@@ -40,6 +42,7 @@ func (uf *UserForm) ToUser() *model.User {
 	user.IsAdmin = uf.IsAdmin
 	user.Status = uf.Status
 	user.Remark = uf.Remark
+	user.MfaRequired = uf.MfaRequired
 	return user
 }
 
@@ -75,4 +78,16 @@ type RegisterForm struct {
 
 type UserTokenBatchDeleteForm struct {
 	Ids []uint `json:"ids" validate:"required"`
+}
+
+// MfaToggleForm CE-M1-5 切换用户级强制 MFA 开关。
+type MfaToggleForm struct {
+	UserId      uint  `json:"user_id" validate:"required,gt=0"`
+	MfaRequired *bool `json:"mfa_required" validate:"required"`
+}
+
+// DisableUserMfaForm CE-M1-5 管理员强制关闭某账号 MFA(清 secret + recovery)。
+type DisableUserMfaForm struct {
+	UserId uint   `json:"user_id" validate:"required,gt=0"`
+	Reason string `json:"reason"`
 }

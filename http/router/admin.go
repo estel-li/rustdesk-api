@@ -50,6 +50,7 @@ func Init(g *gin.Engine) {
 
 	RustdeskCmdBind(adg)
 	DeviceGroupBind(adg)
+	ClientBuilderBind(adg)
 	//访问静态文件
 	//g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/upload"))
 }
@@ -61,6 +62,21 @@ func RustdeskCmdBind(adg *gin.RouterGroup) {
 	rg.GET("/cmdList", cont.CmdList)
 	rg.POST("/cmdDelete", cont.CmdDelete)
 	rg.POST("/cmdCreate", cont.CmdCreate)
+}
+
+// ClientBuilderBind CE-M1-9 轻量 Client Builder。
+// 全部子路由强制 AdminPrivilege;Build 等高敏接口必须管理员才能调用。
+// client-builder.enabled=false 时整组路由不注册,符合 §9 回滚方案。
+func ClientBuilderBind(adg *gin.RouterGroup) {
+	if !global.Config.ClientBuilder.Enabled {
+		return
+	}
+	cont := &admin.ClientBuilder{}
+	rg := adg.Group("/client_builder").Use(middleware.AdminPrivilege())
+	rg.POST("/base/upload", cont.UploadBase)
+	rg.GET("/base/list", cont.ListBase)
+	rg.POST("/base/delete", cont.DeleteBase)
+	rg.POST("/build", cont.Build)
 }
 func LoginBind(rg *gin.RouterGroup) {
 	cont := &admin.Login{}
@@ -91,6 +107,9 @@ func UserBind(rg *gin.RouterGroup) {
 		aRP.POST("/update", cont.Update)
 		aRP.POST("/delete", cont.Delete)
 		aRP.POST("/changePwd", cont.UpdatePassword)
+		// CE-M1-5 强制 MFA toggle / 关闭
+		aRP.POST("/mfa/required", cont.SetMfaRequired)
+		aRP.POST("/mfa/disable", cont.DisableUserMfa)
 	}
 }
 
@@ -103,6 +122,8 @@ func GroupBind(rg *gin.RouterGroup) {
 		aR.POST("/create", cont.Create)
 		aR.POST("/update", cont.Update)
 		aR.POST("/delete", cont.Delete)
+		// CE-M1-5 组级强制 MFA toggle
+		aR.POST("/mfa/required", cont.SetMfaRequired)
 	}
 }
 
@@ -201,6 +222,11 @@ func AuditBind(rg *gin.RouterGroup) {
 	afR.GET("/list", cont.FileList)
 	afR.POST("/delete", cont.FileDelete)
 	afR.POST("/batchDelete", cont.BatchFileDelete)
+	// CE-M1-6: 统一审计事件后台子组,鉴权同 conn/file。
+	aeR := rg.Group("/audit_event").Use(middleware.AdminPrivilege())
+	aeR.GET("/list", cont.EventList)
+	aeR.POST("/delete", cont.EventDelete)
+	aeR.POST("/batchDelete", cont.BatchEventDelete)
 }
 func AddressBookCollectionBind(rg *gin.RouterGroup) {
 	aR := rg.Group("/address_book_collection").Use(middleware.AdminPrivilege())

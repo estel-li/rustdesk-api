@@ -160,3 +160,32 @@ other = "已被封禁。"
 description = "Register success, wait for admin confirm."
 one = "注册成功，请等待管理员审核。"
 other = "注册成功，请等待管理员审核。"
+[MfaRequired]
+description = "MFA required."
+one = "需要多因子认证。"
+other = "需要多因子认证。"
+
+[MfaTicketInvalid]
+description = "MFA ticket invalid."
+one = "MFA 凭证无效，请重新登录。"
+other = "MFA 凭证无效，请重新登录。"
+
+[MfaTicketExpired]
+description = "MFA ticket expired."
+one = "MFA 凭证已过期，请重新登录。"
+other = "MFA 凭证已过期，请重新登录。"
+
+[MfaCodeError]
+description = "MFA code error."
+one = "验证码错误。"
+other = "验证码错误。"
+
+[MfaEnrollRequired]
+description = "Forced MFA but the account has not enrolled."
+one = "策略要求该账号启用 MFA,请联系管理员。"
+other = "策略要求该账号启用 MFA,请联系管理员。"
+
+[MfaCannotDisableSelf]
+description = "Self-protection: admin cannot disable own MFA."
+one = "不能关闭自己的 MFA,请联系其他管理员。"
+other = "不能关闭自己的 MFA,请联系其他管理员。"

@@ -158,3 +158,32 @@ other = "Banned."
 description = "Register success, wait admin confirm."
 one = "Register success, wait admin confirm."
 other = "Register success, wait admin confirm."
+[MfaRequired]
+description = "MFA required."
+one = "Multi-factor authentication required."
+other = "Multi-factor authentication required."
+
+[MfaTicketInvalid]
+description = "MFA ticket invalid."
+one = "MFA ticket invalid, please sign in again."
+other = "MFA ticket invalid, please sign in again."
+
+[MfaTicketExpired]
+description = "MFA ticket expired."
+one = "MFA ticket expired, please sign in again."
+other = "MFA ticket expired, please sign in again."
+
+[MfaCodeError]
+description = "MFA code error."
+one = "Verification code incorrect."
+other = "Verification code incorrect."
+
+[MfaEnrollRequired]
+description = "Forced MFA but the account has not enrolled."
+one = "MFA enrollment is required by policy; please contact your administrator."
+other = "MFA enrollment is required by policy; please contact your administrator."
+
+[MfaCannotDisableSelf]
+description = "Self-protection: admin cannot disable own MFA."
+one = "You cannot disable your own MFA. Ask another administrator."
+other = "You cannot disable your own MFA. Ask another administrator."

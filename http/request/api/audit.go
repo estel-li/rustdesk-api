@@ -76,3 +76,43 @@ func (a *AuditFileForm) ToAuditFile() *model.AuditFile {
 		Num:      fi.Num,
 	}
 }
+
+// CE-M1-6: 统一审计事件入口表单。
+// payload_json 必须由客户端做哈希/截断,服务端只做长度校验,不解析内容。
+const AuditEventPayloadMaxBytes = 16 * 1024
+
+// AuditEventForm 客户端 POST /api/audit/event 的请求体。
+type AuditEventForm struct {
+	Kind        string `json:"kind"`
+	PeerId      string `json:"peer_id"`
+	FromPeer    string `json:"from_peer"`
+	FromName    string `json:"from_name"`
+	SessionId   string `json:"session_id"`
+	Ip          string `json:"ip"`
+	PayloadJson string `json:"payload_json"`
+}
+
+// Validate 检查 kind 白名单与 payload 大小;返回错误字符串(空串表示通过)。
+// 注意:服务端不解析 payload_json,只做长度校验,避免敏感剪贴板内容入库。
+func (a *AuditEventForm) Validate() string {
+	if !model.IsValidAuditEventKind(a.Kind) {
+		return "ParamsError: unknown kind"
+	}
+	if len(a.PayloadJson) > AuditEventPayloadMaxBytes {
+		return "ParamsError: payload too large"
+	}
+	return ""
+}
+
+// ToAuditEvent 把表单映射成 GORM 模型。
+func (a *AuditEventForm) ToAuditEvent() *model.AuditEvent {
+	return &model.AuditEvent{
+		Kind:        a.Kind,
+		PeerId:      a.PeerId,
+		FromPeer:    a.FromPeer,
+		FromName:    a.FromName,
+		SessionId:   a.SessionId,
+		Ip:          a.Ip,
+		PayloadJson: a.PayloadJson,
+	}
+}

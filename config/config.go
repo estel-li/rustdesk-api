@@ -31,6 +31,16 @@ type Admin struct {
 	IdServerPort    int    `mapstructure:"id-server-port"`
 	RelayServerPort int    `mapstructure:"relay-server-port"`
 }
+
+// ClientBuilder CE-M1-9 轻量 Client Builder 配置。
+// 仅支持"复制 + 改名"流程,不做编译/签名。
+type ClientBuilder struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	BaseDir       string `mapstructure:"base-dir"`        // 基础 EXE 持久目录
+	LinkTTLHours  int    `mapstructure:"link-ttl-hours"`  // 下载链接 TTL,默认 168h=7d
+	MaxBaseMB     int    `mapstructure:"max-base-mb"`     // 单个基础 EXE 最大体积
+	PublicBaseUrl string `mapstructure:"public-base-url"` // 留空时使用 rustdesk.api-server
+}
 type Config struct {
 	Lang       string `mapstructure:"lang"`
 	App        App
@@ -47,6 +57,9 @@ type Config struct {
 	Rustdesk   Rustdesk
 	Proxy      Proxy
 	Ldap       Ldap
+	Metrics    Metrics
+	Mfa        Mfa
+	ClientBuilder ClientBuilder `mapstructure:"client-builder"`
 }
 
 func (a *Admin) Init() {
@@ -55,6 +68,19 @@ func (a *Admin) Init() {
 	}
 	if a.RelayServerPort == 0 {
 		a.RelayServerPort = DefaultRelayServerPort
+	}
+}
+
+// Init 设置 ClientBuilder 的默认值。
+func (cb *ClientBuilder) Init() {
+	if cb.BaseDir == "" {
+		cb.BaseDir = "./data/client-builder/base"
+	}
+	if cb.LinkTTLHours <= 0 {
+		cb.LinkTTLHours = 168
+	}
+	if cb.MaxBaseMB <= 0 {
+		cb.MaxBaseMB = 200
 	}
 }
 
@@ -93,6 +119,8 @@ func Init(rowVal *Config, path string) *viper.Viper {
 	}
 	rowVal.Rustdesk.LoadKeyFile()
 	rowVal.Admin.Init()
+	rowVal.Metrics.Init()
+	rowVal.ClientBuilder.Init()
 	return v
 }
 

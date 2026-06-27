@@ -258,7 +258,13 @@ func (us *UserService) Update(u *model.User) error {
 			return errors.New("The last admin user cannot be disabled or demoted")
 		}
 	}
-	return DB.Model(u).Updates(u).Error
+	// CE-M1-5:显式列更新,避免 GORM Updates 把 form 未携带的指针字段(mfa_required / is_admin)误置 false。
+	// 与之前的 DB.Model(u).Updates(u) 等价的列集合在此显式列出;后续如需更新其它列请同步追加。
+	return DB.Model(u).Select(
+		"username", "email", "nickname", "avatar",
+		"group_id", "is_admin", "status", "remark",
+		"mfa_required",
+	).Updates(u).Error
 }
 
 // FlushToken 清空token
@@ -528,4 +534,102 @@ func (us *UserService) IsUsernameExistsLocal(username string) bool {
 
 func (us *UserService) IsEmailExistsLdap(email string) bool {
 	return AllService.LdapService.IsEmailExists(email)
+}
+
+// EffectiveMfaRequired CE-M1-5 计算"有效强制 MFA 策略" = user.MfaRequired || group.MfaRequired。
+// 任一指针为 nil 视为 false,组关系缺失同样视为 false,不 panic。
+func (us *UserService) EffectiveMfaRequired(u *model.User) bool {
+	if u == nil {
+		return false
+	}
+	if u.MfaRequired != nil && *u.MfaRequired {
+		return true
+	}
+	if u.GroupId == 0 {
+		return false
+	}
+	g := AllService.GroupService.InfoById(u.GroupId)
+	if g == nil || g.Id == 0 || g.MfaRequired == nil {
+		return false
+	}
+	return *g.MfaRequired
+}
+
+// SetMfaRequired CE-M1-5 管理员切换用户级强制 MFA 开关,同步写审计日志。
+// 不会触碰 user_mfa 行;若 required=false,已 enroll 的用户依然保留二步登录。
+func (us *UserService) SetMfaRequired(target *model.User, required bool, opUser *model.User, ip string) error {
+	if target == nil || target.Id == 0 {
+		return errors.New("UserNotFound")
+	}
+	v := required
+	if err := DB.Model(&model.User{}).Where("id = ?", target.Id).
+		Update("mfa_required", &v).Error; err != nil {
+		return err
+	}
+	target.MfaRequired = &v
+	action := model.LoginLogTypeMfaRequiredSet
+	if !required {
+		action = model.LoginLogTypeMfaRequiredUnset
+	}
+	us.writeMfaAudit(opUser, target, action, ip)
+	return nil
+}
+
+// DisableMfa CE-M1-5 管理员强制关闭目标用户 MFA:删除 user_mfa 行 + 置 mfa_required=false,
+// 同步落审计。Disable 操作即便清除 secret 后,如组级 mfa_required=true 仍会触发下次登录的 enroll。
+//
+// 入参 reason 仅写入 Logger,审计行不持久化 reason(LoginLog 表无该列);CE-M1-6 落地后可迁移到 AuditEvent。
+func (us *UserService) DisableMfa(target *model.User, opUser *model.User, ip, reason string) error {
+	if target == nil || target.Id == 0 {
+		return errors.New("UserNotFound")
+	}
+	// 1) 删除 user_mfa 行(若不存在则忽略 ErrMfaNotEnrolled,继续把 mfa_required 复位)。
+	if err := AllService.MfaService.Disable(target.Id); err != nil && !errors.Is(err, ErrMfaNotEnrolled) {
+		return err
+	}
+	// 2) 把 mfa_required 复位 false,避免立即再次触发 enroll(组级仍生效)。
+	v := false
+	if err := DB.Model(&model.User{}).Where("id = ?", target.Id).
+		Update("mfa_required", &v).Error; err != nil {
+		return err
+	}
+	target.MfaRequired = &v
+	us.writeMfaAudit(opUser, target, model.LoginLogTypeMfaDisabledByAdmin, ip)
+	if reason != "" {
+		Logger.Infof("mfa disabled by admin op=%d target=%d reason=%q", safeUserId(opUser), target.Id, reason)
+	}
+	return nil
+}
+
+// writeMfaAudit 把 MFA 相关高敏操作写到 login_logs;失败仅 Logger.Error,不阻塞业务路径。
+// 参考 service/user.go Login 中 DB.Create(&model.LoginLog{...}) 的写法。
+// 约定:UserId 写"被操作账号 id",方便 LoginLog 列表按目标账户筛选;操作人 id 落到 Remark/Platform 这类
+// 空闲列不合适,这里把 op.Username 暂塞 Client 列(LoginLog.Client 现有值为 webadmin/webclient/app,
+// 强制 MFA 审计场景下复用为 "admin:<username>" 字面量,CE-M1-6 落地后会迁出到 AuditEvent)。
+func (us *UserService) writeMfaAudit(opUser, target *model.User, action, ip string) {
+	if target == nil {
+		return
+	}
+	client := "admin"
+	if opUser != nil && opUser.Username != "" {
+		client = "admin:" + opUser.Username
+	}
+	row := &model.LoginLog{
+		UserId: target.Id,
+		Client: client,
+		Ip:     ip,
+		Type:   action,
+	}
+	if err := DB.Create(row).Error; err != nil {
+		// 审计落盘失败必须升级为 Logger.Error,但不阻塞业务路径(由调用方决定是否 5xx)。
+		Logger.Errorf("write mfa audit fail action=%s target=%d ip=%s err=%v", action, target.Id, ip, err)
+	}
+}
+
+// safeUserId 在 opUser 为 nil 时返回 0,避免日志 format panic。
+func safeUserId(u *model.User) uint {
+	if u == nil {
+		return 0
+	}
+	return u.Id
 }

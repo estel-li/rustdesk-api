@@ -43,6 +43,11 @@ func (c *RedisCache) Gc() error {
 	return nil
 }
 
+// Ping 探测 redis 连通性,用于启动期 healthcheck 与 /metrics 后端可达性检查。
+func (c *RedisCache) Ping(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
+}
+
 func NewRedis(conf *redis.Options) *RedisCache {
 	cache := RedisCacheInit(conf)
 	return cache

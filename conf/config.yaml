@@ -81,4 +81,30 @@ ldap:
     last-name: "sn"
     sync: false         # If true, the user will be synchronized to the database when the user logs in. If false, the user will be synchronized to the database when the user be created.
     admin-group: "cn=admin,dc=example,dc=com" # The group name of the admin group, if the user is in this group, the user will be an admin.
-    allow-group: "cn=users,dc=example,dc=com" # The group name of the users group, if the user is in this group, the user will be an login. 
+    allow-group: "cn=users,dc=example,dc=com" # The group name of the users group, if the user is in this group, the user will be an login.
+
+metrics:
+  enable: true                # 是否暴露 /metrics 端点
+  bind: "127.0.0.1:21115"     # 强烈建议保持 loopback,不要暴露到 0.0.0.0
+  path: "/metrics"            # HTTP path
+
+mfa:
+  # 32 byte 原始 key(支持 hex 或 base64);留空则 HKDF(jwt.key) 派生
+  # 警告:更换该值或 jwt.key 将导致所有已落库的 TOTP secret 无法解密,需要重新 enroll
+  secret-key: ""
+  issuer: "RustDesk"
+  # CE-M1-3 两步登录 ticket 有效期,3~5 分钟,默认 3m
+  ticket-ttl: 3m
+  # 是否将 ticket 与首步 client IP 绑定(反向代理 / NAT 切换场景可关闭)
+  ticket-bind-ip: true
+  # 单 ticket 内 /api/login-mfa 错误次数上限,超过即把 ticket 作废
+  login-mfa-max-attempts: 5
+
+# CE-M1-9 轻量 Client Builder:不做编译,只将预上传/预下载的 RustDesk Windows
+# portable EXE 按 Configuration String 文件名复制下发。
+client-builder:
+  enabled: true
+  base-dir: "./data/client-builder/base"   # 基础 EXE 持久目录
+  link-ttl-hours: 168                       # 下载链接 TTL,默认 7 天
+  max-base-mb: 200                          # 单个基础 EXE 最大体积(MB)
+  public-base-url: ""                       # 留空时使用 rustdesk.api-server

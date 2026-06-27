@@ -38,6 +38,14 @@ type LoginForm struct {
 	Password   string            `json:"password,omitempty" validate:"gte=4,lte=32" label:"密码"`
 }
 
+// LoginMfaForm CE-M1-3 两步登录第二步:携带首步签发的 ticket + TOTP / recovery code 完成 MFA 校验。
+// Type 留空时默认按 totp 处理,recovery 用于一次性恢复码。
+type LoginMfaForm struct {
+	Ticket string `json:"ticket" validate:"required,gte=10,lte=512" label:"ticket"`
+	Code   string `json:"code"   validate:"required,gte=6,lte=16"    label:"验证码"`
+	Type   string `json:"type"   validate:"omitempty,oneof=totp recovery" label:"类型"`
+}
+
 type UserListQuery struct {
 	Page       uint   `json:"page" form:"page" validate:"required" label:"页码"`
 	PageSize   uint   `json:"pageSize" form:"pageSize" validate:"required" label:"每页数量"`

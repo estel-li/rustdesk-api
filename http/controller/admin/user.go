@@ -346,3 +346,83 @@ func (ct *User) Register(c *gin.Context) {
 	})
 	responseLoginSuccess(c, u, ut.Token)
 }
+
+// SetMfaRequired CE-M1-5 切换用户级强制 MFA 开关。
+// @Tags 用户
+// @Summary 切换用户强制 MFA
+// @Description 管理员切换某用户的强制 MFA 开关;开启后该用户下次登录若尚未 enroll,会被引导走 enroll-then-verify 流程。
+// @Accept  json
+// @Produce  json
+// @Param body body admin.MfaToggleForm true "切换信息"
+// @Success 200 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /admin/user/mfa/required [post]
+// @Security token
+func (ct *User) SetMfaRequired(c *gin.Context) {
+	f := &admin.MfaToggleForm{}
+	if err := c.ShouldBindJSON(f); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError")+err.Error())
+		return
+	}
+	errList := global.Validator.ValidStruct(c, f)
+	if len(errList) > 0 {
+		response.Fail(c, 101, errList[0])
+		return
+	}
+	if f.MfaRequired == nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError"))
+		return
+	}
+	target := service.AllService.UserService.InfoById(f.UserId)
+	if target.Id == 0 {
+		response.Fail(c, 101, response.TranslateMsg(c, "ItemNotFound"))
+		return
+	}
+	opUser := service.AllService.UserService.CurUser(c)
+	if err := service.AllService.UserService.SetMfaRequired(target, *f.MfaRequired, opUser, c.ClientIP()); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "OperationFailed")+err.Error())
+		return
+	}
+	response.Success(c, nil)
+}
+
+// DisableUserMfa CE-M1-5 管理员强制关闭某账号 MFA(清 secret + recovery + 复位 mfa_required)。
+// 自我保护:管理员不允许对自己执行该操作,防止误操作锁死。
+// @Tags 用户
+// @Summary 关闭用户 MFA
+// @Description 删除目标账号 user_mfa 行并复位 mfa_required;触发审计 mfa_disabled_by_admin。
+// @Accept  json
+// @Produce  json
+// @Param body body admin.DisableUserMfaForm true "关闭信息"
+// @Success 200 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /admin/user/mfa/disable [post]
+// @Security token
+func (ct *User) DisableUserMfa(c *gin.Context) {
+	f := &admin.DisableUserMfaForm{}
+	if err := c.ShouldBindJSON(f); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "ParamsError")+err.Error())
+		return
+	}
+	errList := global.Validator.ValidStruct(c, f)
+	if len(errList) > 0 {
+		response.Fail(c, 101, errList[0])
+		return
+	}
+	target := service.AllService.UserService.InfoById(f.UserId)
+	if target.Id == 0 {
+		response.Fail(c, 101, response.TranslateMsg(c, "ItemNotFound"))
+		return
+	}
+	opUser := service.AllService.UserService.CurUser(c)
+	// 禁止 admin 关掉自己的 MFA,避免误操作锁死(任务卡 §8 自我保护)。
+	if opUser != nil && opUser.Id == target.Id {
+		response.Fail(c, 101, response.TranslateMsg(c, "MfaCannotDisableSelf"))
+		return
+	}
+	if err := service.AllService.UserService.DisableMfa(target, opUser, c.ClientIP(), f.Reason); err != nil {
+		response.Fail(c, 101, response.TranslateMsg(c, "OperationFailed")+err.Error())
+		return
+	}
+	response.Success(c, nil)
+}

@@ -82,3 +82,33 @@ func (a *Audit) AuditFile(c *gin.Context) {
 	service.AllService.AuditService.CreateAuditFile(af)
 	response.Success(c, "")
 }
+
+// AuditEvent CE-M1-6: 统一审计事件入口。
+// 客户端先做哈希/截断,服务端仅做白名单 + 16KB 长度校验,不解析 payload_json 内容。
+// payload_json must not contain raw clipboard/file content; client must hash & truncate.
+// @Tags 审计
+// @Summary 审计事件
+// @Description 统一审计事件入口(剪贴板/告警/命令/录像);payload_json 由客户端哈希截断,服务端不解析。
+// @Accept  json
+// @Produce  json
+// @Param body body request.AuditEventForm true "审计事件"
+// @Success 200 {string} string ""
+// @Failure 500 {object} response.Response
+// @Router /audit/event [post]
+func (a *Audit) AuditEvent(c *gin.Context) {
+	aef := &request.AuditEventForm{}
+	if err := c.ShouldBindBodyWith(aef, binding.JSON); err != nil {
+		response.Error(c, response.TranslateMsg(c, "ParamsError")+err.Error())
+		return
+	}
+	if msg := aef.Validate(); msg != "" {
+		response.Error(c, response.TranslateMsg(c, "ParamsError")+msg)
+		return
+	}
+	ev := aef.ToAuditEvent()
+	if err := service.AllService.AuditService.CreateAuditEvent(ev); err != nil {
+		response.Error(c, err.Error())
+		return
+	}
+	response.Success(c, "")
+}

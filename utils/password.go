@@ -40,3 +40,26 @@ func VerifyPassword(hash, input string) (bool, string, error) {
 	}
 	return false, "", err
 }
+
+// HashRecoveryCode hashes a MFA recovery code with bcrypt.
+// Recovery code 一律走 bcrypt,落库后不可逆;明文仅在 enroll 接口一次性返回前端。
+func HashRecoveryCode(code string) (string, error) {
+	bs, err := bcrypt.GenerateFromPassword([]byte(code), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(bs), nil
+}
+
+// VerifyRecoveryCode 校验输入是否匹配 bcrypt(hash);不匹配 matched=false 且 err=nil。
+// 内部错误(非 mismatch)以 err 返回,便于上层落审计日志。
+func VerifyRecoveryCode(hash, input string) (matched bool, err error) {
+	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(input))
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+		return false, nil
+	}
+	return false, err
+}

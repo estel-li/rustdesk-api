@@ -38,3 +38,45 @@ func TestVerifyPasswordMigrate(t *testing.T) {
 		t.Fatalf("rehash not valid bcrypt")
 	}
 }
+
+func TestHashRecoveryCode_VerifyOk(t *testing.T) {
+	code := "ABCD-1234"
+	hash, err := HashRecoveryCode(code)
+	if err != nil {
+		t.Fatalf("hash err: %v", err)
+	}
+	if hash == code || hash == "" {
+		t.Fatalf("unexpected hash %q", hash)
+	}
+	ok, err := VerifyRecoveryCode(hash, code)
+	if err != nil {
+		t.Fatalf("verify err: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected match")
+	}
+}
+
+func TestHashRecoveryCode_VerifyMismatch(t *testing.T) {
+	hash, err := HashRecoveryCode("good-code")
+	if err != nil {
+		t.Fatalf("hash err: %v", err)
+	}
+	ok, err := VerifyRecoveryCode(hash, "bad-code")
+	if err != nil {
+		t.Fatalf("verify err: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected mismatch")
+	}
+}
+
+func TestVerifyRecoveryCode_BadHash(t *testing.T) {
+	ok, err := VerifyRecoveryCode("not-a-bcrypt-hash", "x")
+	if err == nil {
+		t.Fatalf("expected error on malformed hash")
+	}
+	if ok {
+		t.Fatalf("expected matched=false on malformed hash")
+	}
+}

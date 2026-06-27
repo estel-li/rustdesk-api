@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
+	"github.com/lejianwen/rustdesk-api/v2/http/metrics"
 	"github.com/lejianwen/rustdesk-api/v2/http/middleware"
 	"github.com/lejianwen/rustdesk-api/v2/http/router"
 	"github.com/sirupsen/logrus"
@@ -33,9 +34,12 @@ func ApiInit() {
 	g.NoRoute(func(c *gin.Context) {
 		c.String(http.StatusNotFound, "404 not found")
 	})
-	g.Use(middleware.Logger(), middleware.Limiter(), gin.Recovery())
+	// Metrics 中间件需在 Limiter 之前,以便记录被限流的 4xx 请求
+	g.Use(middleware.Logger(), middleware.Metrics(), middleware.Limiter(), gin.Recovery())
 	router.WebInit(g)
 	router.Init(g)
 	router.ApiInit(g)
+	// 在独立端口暴露 /metrics,不抢占 21114
+	metrics.StartServer(global.Config.Metrics, global.Logger)
 	Run(g, global.Config.Gin.ApiAddr)
 }

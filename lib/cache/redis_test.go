@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestRedisSet(t *testing.T) {
@@ -90,5 +92,20 @@ func BenchmarkRGet(b *testing.B) {
 	v := ""
 	for i := 0; i < b.N; i++ {
 		rc.Get("123", &v)
+	}
+}
+
+// TestRedisCache_Ping_ReturnsErrorOnBadAddr 校验 RedisCache.Ping 能在 redis 不可达时返回错误,
+// 这是 cmd/apimain.go fallback 到内存缓存的依据。
+func TestRedisCache_Ping_ReturnsErrorOnBadAddr(t *testing.T) {
+	rc := RedisCacheInit(&redis.Options{
+		Addr:        "127.0.0.1:1", // 不存在的端口
+		DialTimeout: 200 * time.Millisecond,
+		ReadTimeout: 200 * time.Millisecond,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := rc.Ping(ctx); err == nil {
+		t.Fatalf("expected Ping to fail on unreachable redis, got nil")
 	}
 }

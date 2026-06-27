@@ -12,6 +12,9 @@ type User struct {
 	IsAdmin  *bool      `json:"is_admin" gorm:"default:0;not null;"`
 	Status   StatusCode `json:"status" gorm:"default:1;not null;"`
 	Remark   string     `json:"remark" gorm:"default:'';not null;"`
+	// MfaRequired CE-M1-5 用户级强制 MFA 开关:与 group.mfa_required 取或得到生效策略。
+	// *bool 与 IsAdmin 同款,避免 GORM Updates 把零值视为未设置。
+	MfaRequired *bool `json:"mfa_required" gorm:"default:0;not null;index"`
 	TimeModel
 }
 

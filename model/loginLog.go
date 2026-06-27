@@ -23,6 +23,11 @@ const (
 const (
 	LoginLogTypeAccount = "account"
 	LoginLogTypeOauth   = "oauth"
+	// CE-M1-5 强制 MFA 审计枚举:登录日志复用此字段记录管理员高敏操作。
+	LoginLogTypeMfaRequiredSet     = "mfa_required_set"
+	LoginLogTypeMfaRequiredUnset   = "mfa_required_unset"
+	LoginLogTypeMfaDisabledByAdmin = "mfa_disabled_by_admin"
+	LoginLogTypeMfaEnrollForced    = "mfa_enroll_forced"
 )
 
 const (

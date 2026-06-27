@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"crypto/md5"
 	"fmt"
 	"os"
@@ -92,6 +93,11 @@ func (c *FileCache) fileName(key string) string {
 
 func (c *FileCache) Gc() error {
 	//检查文件过期时间，并删除
+	return nil
+}
+
+// Ping 文件缓存默认视为健康;若目录不可写可考虑在此返回错误。
+func (c *FileCache) Ping(ctx context.Context) error {
 	return nil
 }
 

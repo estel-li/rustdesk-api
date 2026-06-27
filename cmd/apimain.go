@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/lejianwen/rustdesk-api/v2/config"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 	"github.com/lejianwen/rustdesk-api/v2/http"
+	"github.com/lejianwen/rustdesk-api/v2/http/metrics"
 	"github.com/lejianwen/rustdesk-api/v2/lib/cache"
 	"github.com/lejianwen/rustdesk-api/v2/lib/jwt"
 	"github.com/lejianwen/rustdesk-api/v2/lib/lock"
@@ -20,10 +22,11 @@ import (
 	"github.com/lejianwen/rustdesk-api/v2/service"
 	"github.com/lejianwen/rustdesk-api/v2/utils"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-const DatabaseVersion = 265
+const DatabaseVersion = 269
 
 // @title 管理系统API
 // @version 1.0
@@ -129,19 +132,11 @@ func InitGlobal() {
 		Password: global.Config.Redis.Password,
 		DB:       global.Config.Redis.Db,
 	})
+	// Redis healthcheck:失败仅 Warn,不退出进程(默认 SQLite + 内存缓存部署可正常启动)
+	pingRedisClient(global.Redis, global.Logger)
 
 	//cache
-	if global.Config.Cache.Type == cache.TypeFile {
-		fc := cache.NewFileCache()
-		fc.SetDir(global.Config.Cache.FileDir)
-		global.Cache = fc
-	} else if global.Config.Cache.Type == cache.TypeRedis {
-		global.Cache = cache.NewRedis(&redis.Options{
-			Addr:     global.Config.Cache.RedisAddr,
-			Password: global.Config.Cache.RedisPwd,
-			DB:       global.Config.Cache.RedisDb,
-		})
-	}
+	global.Cache = initCacheWithFallback(&global.Config, global.Logger)
 	//gorm
 	if global.Config.Gorm.Type == config.TypeMysql {
 
@@ -283,9 +278,116 @@ func DatabaseAutoUpdate() {
 		if v.Version < 246 {
 			db.Exec("update oauths set issuer = 'https://accounts.google.com' where op = 'google' and issuer is null")
 		}
+		if v.Version < 266 {
+			// CE-M1-1: user_mfas 表由 AutoMigrate 创建,无历史数据回填。
+			// 保留 hook 供后续 CE-M1-2/3 追加(如默认 recovery code 生成、字段补齐等)。
+		}
+		if v.Version < 267 {
+			// CE-M1-5: users / groups 表追加 mfa_required 列(默认 0 = 不强制)。
+			// AutoMigrate 在 PostgreSQL / MySQL 下能识别新字段并追加列,SQLite 在新建表时也能添加;
+			// 但对存量库,旧 AutoMigrate 不会回填索引,这里手写一遍兜底,保证升级幂等。
+			switch global.Config.Gorm.Type {
+			case config.TypeMysql:
+				_ = db.Exec("ALTER TABLE users ADD COLUMN mfa_required TINYINT(1) NOT NULL DEFAULT 0").Error
+				_ = db.Exec("ALTER TABLE `groups` ADD COLUMN mfa_required TINYINT(1) NOT NULL DEFAULT 0").Error
+				_ = db.Exec("CREATE INDEX idx_users_mfa_required ON users(mfa_required)").Error
+				_ = db.Exec("CREATE INDEX idx_groups_mfa_required ON `groups`(mfa_required)").Error
+			case config.TypePostgresql:
+				_ = db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_required BOOLEAN NOT NULL DEFAULT FALSE").Error
+				_ = db.Exec("ALTER TABLE groups ADD COLUMN IF NOT EXISTS mfa_required BOOLEAN NOT NULL DEFAULT FALSE").Error
+				_ = db.Exec("CREATE INDEX IF NOT EXISTS idx_users_mfa_required ON users(mfa_required)").Error
+				_ = db.Exec("CREATE INDEX IF NOT EXISTS idx_groups_mfa_required ON groups(mfa_required)").Error
+			default:
+				// sqlite:ADD COLUMN 重复执行会报错,先用 PRAGMA 嗅探,缺列再补。
+				if !db.Migrator().HasColumn(&model.User{}, "mfa_required") {
+					_ = db.Exec("ALTER TABLE users ADD COLUMN mfa_required INTEGER NOT NULL DEFAULT 0").Error
+				}
+				if !db.Migrator().HasColumn(&model.Group{}, "mfa_required") {
+					_ = db.Exec("ALTER TABLE `groups` ADD COLUMN mfa_required INTEGER NOT NULL DEFAULT 0").Error
+				}
+				_ = db.Exec("CREATE INDEX IF NOT EXISTS idx_users_mfa_required ON users(mfa_required)").Error
+				_ = db.Exec("CREATE INDEX IF NOT EXISTS idx_groups_mfa_required ON `groups`(mfa_required)").Error
+			}
+		}
+		if v.Version < 268 {
+			// CE-M1-6: 新增 audit_events 表 + (kind, created_at) 复合索引。
+			// 表本身由上方 Migrate() 中的 AutoMigrate 在版本升级时建出;此处只补复合索引,
+			// 兼容旧库已经存在表但缺索引的情形。
+			if err := db.AutoMigrate(&model.AuditEvent{}); err != nil {
+				global.Logger.Warn("CE-M1-6 audit_events automigrate: ", err)
+			}
+			ensureAuditEventCompositeIndex()
+		}
+		if v.Version < 269 {
+			// CE-M1-9: 新增 client_builder_artifacts 表(轻量 Client Builder 元数据)。
+			// AutoMigrate 已在 Migrate() 中处理首建;此处对老库兜底,保证升级幂等。
+			if err := db.AutoMigrate(&model.ClientBuilderArtifact{}); err != nil {
+				global.Logger.Warn("CE-M1-9 client_builder_artifacts automigrate: ", err)
+			}
+		}
 	}
 
 }
+
+// pingRedisClient 显式校验 redis 客户端连通性,失败仅 Warn,不退出。
+// 满足 ai-development-plan.md:174 "redis 不可达不得让默认部署崩溃" 的硬性约束。
+func pingRedisClient(client *redis.Client, log *logrus.Logger) {
+	if client == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		if log != nil {
+			log.Warnf("redis ping failed: %v (continuing without redis)", err)
+		}
+	}
+}
+
+// initCacheWithFallback 根据 cfg.Cache.Type 构造缓存后端;redis 不可达时降级到内存缓存。
+// 同步把当前后端类型写入 metrics gauge,供 /metrics 排障使用。
+//
+// 行为变更:
+//   - cfg.Cache.Type == "" 或未知值时,旧逻辑会让 global.Cache 维持 nil,后续 .Get / .Set 直接 panic;
+//     新逻辑统一走 cache.New(...) 落到 memory 后端。
+func initCacheWithFallback(cfg *config.Config, log *logrus.Logger) cache.Handler {
+	typ := cfg.Cache.Type
+	switch typ {
+	case cache.TypeFile:
+		fc := cache.NewFileCache()
+		fc.SetDir(cfg.Cache.FileDir)
+		metrics.SetCacheBackend(cache.TypeFile)
+		return fc
+	case cache.TypeRedis:
+		rc := cache.NewRedis(&redis.Options{
+			Addr:     cfg.Cache.RedisAddr,
+			Password: cfg.Cache.RedisPwd,
+			DB:       cfg.Cache.RedisDb,
+		})
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := rc.Ping(ctx); err != nil {
+			metrics.IncCachePingFailure(cache.TypeRedis)
+			if log != nil {
+				log.Warnf("redis cache ping failed: %v; fallback to memory cache", err)
+			}
+			metrics.SetCacheBackend(cache.TypeMem)
+			return cache.NewMemoryCache(0)
+		}
+		metrics.SetCacheBackend(cache.TypeRedis)
+		return rc
+	default:
+		// 空串 / "memory" / 未知值都走内存,修复历史 nil 隐患
+		if typ != "" && typ != cache.TypeMem {
+			if log != nil {
+				log.Warnf("unknown cache.type %q, falling back to memory", typ)
+			}
+		}
+		metrics.SetCacheBackend(cache.TypeMem)
+		return cache.NewMemoryCache(0)
+	}
+}
+
 func Migrate(version uint) {
 	global.Logger.Info("Migrating....", version)
 	err := global.DB.AutoMigrate(
@@ -306,10 +408,15 @@ func Migrate(version uint) {
 		&model.AddressBookCollectionRule{},
 		&model.ServerCmd{},
 		&model.DeviceGroup{},
+		&model.UserMfa{},
+		&model.AuditEvent{},
+		&model.ClientBuilderArtifact{},
 	)
 	if err != nil {
 		global.Logger.Error("migrate err :=>", err)
 	}
+	// CE-M1-6: AutoMigrate 对复合索引支持不稳,这里显式建一次 (kind, created_at)。
+	ensureAuditEventCompositeIndex()
 	global.DB.Create(&model.Version{Version: version})
 	//如果是初次则创建一个默认用户
 	var vc int64
@@ -354,4 +461,22 @@ func Migrate(version uint) {
 		global.DB.Create(admin)
 	}
 
+}
+
+// ensureAuditEventCompositeIndex CE-M1-6: 显式建立 audit_events(kind, created_at) 复合索引。
+// SQLite / PostgreSQL 支持 CREATE INDEX IF NOT EXISTS;MySQL 不支持,需先用 SHOW INDEX 嗅探。
+func ensureAuditEventCompositeIndex() {
+	if global.DB == nil {
+		return
+	}
+	switch global.Config.Gorm.Type {
+	case config.TypeMysql:
+		// MySQL 不支持 IF NOT EXISTS,直接执行并忽略 1061 (duplicate key) 类错误。
+		_ = global.DB.Exec("CREATE INDEX idx_audit_event_kind_created ON audit_events(kind, created_at)").Error
+	default:
+		// SQLite / PostgreSQL
+		if err := global.DB.Exec("CREATE INDEX IF NOT EXISTS idx_audit_event_kind_created ON audit_events(kind, created_at)").Error; err != nil {
+			global.Logger.Warn("ensureAuditEventCompositeIndex: ", err)
+		}
+	}
 }

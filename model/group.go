@@ -9,6 +9,8 @@ type Group struct {
 	IdModel
 	Name string `json:"name" gorm:"default:'';not null;"`
 	Type int    `json:"type" gorm:"default:1;not null;"`
+	// MfaRequired CE-M1-5 组级强制 MFA 开关:与 user.mfa_required 取或得到生效策略。
+	MfaRequired *bool `json:"mfa_required" gorm:"default:0;not null;index"`
 	TimeModel
 }
 

@@ -36,7 +36,15 @@ func ApiInit(g *gin.Engine) {
 		// 如果返回oidc则可以通过oidc登录
 		frg.GET("/login-options", l.LoginOptions)
 		frg.POST("/login", l.Login)
+		// CE-M1-3 两步登录第二步:必须放在 frg.Use(middleware.RustAuth()) 之前的公开组。
+		frg.POST("/login-mfa", l.LoginMfa)
 
+	}
+
+	{
+		// CE-M1-5 强制 MFA enroll + verify:接续 /api/login 返回的 enroll_required 分支。
+		mfa := &api.Mfa{}
+		frg.POST("/mfa/enroll-then-verify", mfa.EnrollThenVerify)
 	}
 
 	{
@@ -71,6 +79,17 @@ func ApiInit(g *gin.Engine) {
 		frg.POST("/audit/conn", au.AuditConn)
 		//[method:POST] [uri:/api/audit/file]
 		frg.POST("/audit/file", au.AuditFile)
+		// CE-M1-6: 统一审计事件入口(剪贴板/告警/命令/录像);与 conn/file 同段,未鉴权。
+		frg.POST("/audit/event", au.AuditEvent)
+	}
+
+	// CE-M1-9 轻量 Client Builder 公开端点:token 一次性短期凭证,不走鉴权
+	// 中间件。enabled=false 时整组不注册,等价回滚。
+	if global.Config.ClientBuilder.Enabled {
+		cb := &api.ClientBuilder{}
+		frg.GET("/client-builder/download/:token", cb.Download)
+		frg.GET("/client-builder/landing/:token", cb.Landing)
+		frg.GET("/client-builder/qr/:token", cb.QR)
 	}
 
 	frg.Use(middleware.RustAuth())

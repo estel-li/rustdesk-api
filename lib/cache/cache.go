@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 )
 
@@ -8,6 +9,7 @@ type Handler interface {
 	Get(key string, value interface{}) error
 	Set(key string, value interface{}, exp int) error
 	Gc() error
+	Ping(ctx context.Context) error
 }
 
 // MaxTimeOut 最大超时时间

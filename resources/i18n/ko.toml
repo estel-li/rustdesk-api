@@ -161,3 +161,22 @@ other = "금지됨."
 description = "Register success wait admin confirm."
 one = "가입 성공, 관리자 확인 대기 중."
 other = "가입 성공, 관리자 확인 대기 중."
+[MfaRequired]
+description = "MFA required."
+one = "Multi-factor authentication required."
+other = "Multi-factor authentication required."
+
+[MfaTicketInvalid]
+description = "MFA ticket invalid."
+one = "MFA ticket invalid, please sign in again."
+other = "MFA ticket invalid, please sign in again."
+
+[MfaTicketExpired]
+description = "MFA ticket expired."
+one = "MFA ticket expired, please sign in again."
+other = "MFA ticket expired, please sign in again."
+
+[MfaCodeError]
+description = "MFA code error."
+one = "Verification code incorrect."
+other = "Verification code incorrect."

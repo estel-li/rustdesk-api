@@ -3,6 +3,7 @@ package cache
 import (
 	"container/heap"
 	"container/list"
+	"context"
 	"errors"
 	"reflect"
 	"sync"
@@ -197,6 +198,11 @@ func (m *MemoryCache) Gc() error {
 	m.pq = make(PriorityQueue, 0)
 	heap.Init(&m.pq)
 	m.usedBytes = 0
+	return nil
+}
+
+// Ping 内存缓存无外部依赖,始终视为健康。
+func (m *MemoryCache) Ping(ctx context.Context) error {
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sync"
@@ -55,6 +56,11 @@ func (s *SimpleCache) Set(key string, value interface{}, exp int) error {
 	return nil
 }
 func (s *SimpleCache) Gc() error {
+	return nil
+}
+
+// Ping SimpleCache 无外部依赖,始终健康。
+func (s *SimpleCache) Ping(ctx context.Context) error {
 	return nil
 }
 
