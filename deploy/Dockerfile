@@ -53,6 +53,7 @@ RUN --mount=type=cache,target=/root/.npm \
 # ---- 阶段 C:runtime ----
 FROM debian:bookworm-slim
 
+# util-linux 自带 setpriv(entrypoint 降权用),bookworm-slim 默认带,无需额外装
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         tzdata \
@@ -74,9 +75,13 @@ COPY --from=builder   /src/docs        /app/docs
 # admin 前端落到 /app/resources/admin,Gin 的 StaticFS("/_admin") 会从这里取
 COPY --from=admin-web /web/dist        /app/resources/admin
 
-RUN chown -R rustdesk:rustdesk /app
+# Entrypoint 脚本:启动时 chown /app/data /app/runtime + 降权到 rustdesk。
+COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh \
+    && chown -R rustdesk:rustdesk /app
 
-USER rustdesk:rustdesk
+# 注意:这里 *不* USER rustdesk —— 必须以 root 进入 entrypoint 才能 chown
+# bind mount 目录(Linux),entrypoint 内部用 setpriv 降权到 rustdesk(UID 1000)。
 
 # 21114 API/Web、21115 metrics(CE-M0-4,默认 loopback)
 EXPOSE 21114 21115
@@ -88,4 +93,4 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fsS http://127.0.0.1:21114/api/version || exit 1
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/apimain"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh", "/app/apimain"]
