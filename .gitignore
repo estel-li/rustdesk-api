@@ -2,7 +2,8 @@
 runtime/*
 !runtime
 !runtime/cache/.gitkeep
-go.sum
+# go.sum 入库:CE 在 fork 里做 in-docker build,需要 lock 文件保证可复现
+# (lejianwen 上游用预编译产物塞 docker,从不需要 go.sum,所以 ignore)
 resources/admin
 release
 data/rustdeskapi.db
