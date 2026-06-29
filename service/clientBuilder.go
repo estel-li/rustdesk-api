@@ -78,7 +78,7 @@ const reuseKeyPrefix = "client_builder:reuse:"
 // 文件名拼装
 // ---------------------------------------------------------------------------
 
-// BuildFilename 按 CE-M1-9 §4.4 拼接 RustDesk-host=...,...exe。
+// BuildFilename 按 CE-M1-9 §4.4 拼接 EstelRemote-host=...,...exe。
 // host 必填(否则返回 ErrEmptyHost);其余字段为空时整段省略,避免客户端把
 // "key=" 这类空段当作有效配置。
 func BuildFilename(host, key, api, relay string) (string, error) {
@@ -87,7 +87,7 @@ func BuildFilename(host, key, api, relay string) (string, error) {
 		return "", ErrEmptyHost
 	}
 	var b strings.Builder
-	b.WriteString("RustDesk-host=")
+	b.WriteString("EstelRemote-host=")
 	b.WriteString(safeFieldEncode(host))
 	if k := strings.TrimSpace(key); k != "" {
 		b.WriteString(",key=")

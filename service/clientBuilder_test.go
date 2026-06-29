@@ -19,7 +19,7 @@ func TestBuildFilename_AllFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if !strings.HasPrefix(got, "RustDesk-host=") {
+	if !strings.HasPrefix(got, "EstelRemote-host=") {
 		t.Fatalf("missing prefix: %q", got)
 	}
 	if !strings.HasSuffix(got, ".exe") {
@@ -56,7 +56,7 @@ func TestBuildFilename_OmitEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	want := "RustDesk-host=id.example.com.exe"
+	want := "EstelRemote-host=id.example.com.exe"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

@@ -6,7 +6,7 @@ import "time"
 // 留空时由 utils.DeriveMfaKey 走 HKDF(Jwt.Key) 派生 32 byte 加密密钥。
 type Mfa struct {
 	SecretKey string `mapstructure:"secret-key"` // 32 byte 原始 key(hex/base64);留空则 HKDF(Jwt.Key)
-	Issuer    string `mapstructure:"issuer"`     // TOTP otpauth issuer,默认 "RustDesk"
+	Issuer    string `mapstructure:"issuer"`     // TOTP otpauth issuer,留空走 service.defaultMfaIssuer("Estel Remote")
 
 	// TicketTTL CE-M1-3 两步登录 ticket 有效期,默认 3 分钟,最大 5 分钟(超出由 service.IssueTicket clamp)。
 	TicketTTL time.Duration `mapstructure:"ticket-ttl"`

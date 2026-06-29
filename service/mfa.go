@@ -41,7 +41,7 @@ var (
 type MfaService struct{}
 
 // defaultRecoveryIssuer 在 Config.Mfa.Issuer / Config.Admin.Title 全部为空时使用。
-const defaultMfaIssuer = "RustDesk API"
+const defaultMfaIssuer = "Estel Remote"
 
 // totpPeriodSeconds = 30s,Digits=6,Algorithm=SHA1,Skew=±1 step。
 // 保留为常量便于测试 helper 复用。
