@@ -268,7 +268,7 @@ func (s *ClientBuilderService) ListBases(page, pageSize uint) *model.ClientBuild
 	res := &model.ClientBuilderArtifactList{}
 	res.Page = int64(page)
 	res.PageSize = int64(pageSize)
-	tx := DB.Model(&model.ClientBuilderArtifact{}).Order("id DESC")
+	tx := DB.Model(&model.ClientBuilderArtifact{}).Where("active = 1").Order("id DESC")
 	tx.Count(&res.Total)
 	tx.Scopes(Paginate(page, pageSize)).Find(&res.Artifacts)
 	return res
